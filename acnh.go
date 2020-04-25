@@ -1,11 +1,10 @@
-package main
+package acnh
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"net/http"
 )
@@ -53,25 +52,4 @@ func postMessage(token string, messageRequest *MessageRequest) error {
 	fmt.Println(string(b))
 
 	return nil
-}
-
-func run() error {
-	token := ""
-	err := postMessage(token, &MessageRequest{
-		Body: string(randomBytes(20)),
-		Type: "all_friend",
-	})
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func main() {
-	err := run()
-	if err != nil {
-		log.Fatal(err)
-	}
 }
