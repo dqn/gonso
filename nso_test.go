@@ -9,5 +9,3 @@ func TestLogin(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
-func 

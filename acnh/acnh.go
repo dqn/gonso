@@ -5,23 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 )
 
 type MessageRequest struct {
 	Body string `json:"body"`
 	Type string `json:"type"`
-}
-
-func randomBytes(n uint) []byte {
-	letter := []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return b
 }
 
 func postMessage(token string, messageRequest *MessageRequest) error {
