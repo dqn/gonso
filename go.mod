@@ -1,3 +1,3 @@
-module github.com/dqn/nintendo-switch-online
+module github.com/dqn/go-nso
 
 go 1.14
