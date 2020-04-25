@@ -8,8 +8,6 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
-	"net/http/cookiejar"
-	"net/url"
 )
 
 type MessageRequest struct {
@@ -27,46 +25,21 @@ func randomBytes(n uint) []byte {
 	return b
 }
 
-func parseCookie(s string) []*http.Cookie {
-	// rawCookies := "cookie1=value1;cookie2=value2"
+func postMessage(token string, messageRequest *MessageRequest) error {
+	rawJSON, err := json.Marshal(messageRequest)
+	if err != nil {
+		return err
+	}
 
-	h := http.Header{}
-	h.Add("Cookie", s)
-	r := http.Request{Header: h}
-	return r.Cookies()
-}
-
-func run() error {
 	rawURL := "https://web.sd.lp1.acbaa.srv.nintendo.net/api/sd/v1/messages"
-	u, err := url.Parse("https://web.sd.lp1.acbaa.srv.nintendo.net/")
-	if err != nil {
-		return err
-	}
-
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return err
-	}
-
-	rawCookie := ""
-	jar.SetCookies(u, parseCookie(rawCookie))
-
-	rawJSON, err := json.Marshal(&MessageRequest{
-		Body: string(randomBytes(20)),
-		Type: "all_friend",
-	})
-	if err != nil {
-		return err
-	}
-
 	req, err := http.NewRequest("POST", rawURL, bytes.NewBuffer([]byte(rawJSON)))
 	if err != nil {
 		return err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "")
-	client := http.Client{Jar: jar}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	client := http.Client{}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -77,11 +50,22 @@ func run() error {
 	if err != nil {
 		return err
 	}
-
-	fmt.Println(resp.Header)
-	fmt.Println(resp.Header.Get("Set-Cookie"))
-
 	fmt.Println(string(b))
+
+	return nil
+}
+
+func run() error {
+	token := ""
+	err := postMessage(token, &MessageRequest{
+		Body: string(randomBytes(20)),
+		Type: "all_friend",
+	})
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
