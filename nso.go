@@ -18,137 +18,23 @@ import (
 	"github.com/google/uuid"
 )
 
-var clientID = "71b963c1b7b6d119"
+const clientID = "71b963c1b7b6d119"
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 type NSO struct {
 	client *http.Client
-}
-
-type sessionTokenResponse struct {
-	Code         string `json:"code"`
-	SessionToken string `json:"session_token"`
-}
-
-type tokenRequest struct {
-	ClientID     string `json:"client_id"`
-	GrantType    string `json:"grant_type"`
-	SessionToken string `json:"session_token"`
-}
-
-type tokenResponse struct {
-	AccessToken string   `json:"access_token"`
-	ExpiresIn   uint     `json:"expires_in"`
-	IDToken     string   `json:"id_token"`
-	Scope       []string `json:"scope"`
-	TokenType   string   `json:"token_type"`
-}
-
-type loginRequestParameter struct {
-	F          string `json:"f"`
-	Language   string `json:"language"`
-	NaBirthday string `json:"naBirthday"`
-	NaCountry  string `json:"naCountry"`
-	NaIDToken  string `json:"naIdToken"`
-	RequestID  string `json:"requestId"`
-	Timestamp  int64  `json:"timestamp"`
-}
-
-type loginRequest struct {
-	Parameter loginRequestParameter `json:"parameter"`
-}
-
-type firebaseCredential struct {
-	AccessToken string `json:"accessToken"`
-	ExpiresIn   int    `json:"expiresIn"`
-}
-
-type membership struct {
-	Active bool `json:"active"`
-}
-
-type user struct {
-	ID         int64      `json:"id"`
-	ImageURI   string     `json:"imageUri"`
-	Membership membership `json:"membership"`
-	Name       string     `json:"name"`
-	SupportID  string     `json:"supportId"`
-}
-
-type webApiServerCredential struct {
-	AccessToken string `json:"accessToken"`
-	ExpiresIn   int    `json:"expiresIn"`
-}
-
-type s2sResponse struct {
-	Hash string `json:"hash"`
-}
-
-type flagpResult struct {
-	F  string `json:"f"`
-	P1 string `json:"p1"`
-	P2 string `json:"p2"`
-	P3 string `json:"p3"`
-}
-
-type flagpResponse struct {
-	Result flagpResult `json:"result"`
-}
-
-type loginResponseResult struct {
-	FirebaseCredential     firebaseCredential     `json:"firebaseCredential"`
-	User                   user                   `json:"user"`
-	WebAPIServerCredential webApiServerCredential `json:"webApiServerCredential"`
-}
-
-type loginResponse struct {
-	CorrelationID string              `json:"correlationId"`
-	Result        loginResponseResult `json:"result"`
-	Status        int                 `json:"status"`
-}
-
-type webServiceTokenRequestParameter struct {
-	F                 string `json:"f"`
-	ID                int64  `json:"id"`
-	RegistrationToken string `json:"registrationToken"`
-	RequestID         string `json:"requestId"`
-	Timestamp         int64  `json:"timestamp"`
-}
-
-type webServiceTokenRequest struct {
-	Parameter webServiceTokenRequestParameter `json:"parameter"`
-}
-
-type webServiceTokenResponseResult struct {
-	AccessToken string `json:"accessToken"`
-	ExpiresIn   int    `json:"expiresIn"`
-}
-
-type webServiceTokenResponse struct {
-	CorrelationID string                        `json:"correlationId"`
-	Result        webServiceTokenResponseResult `json:"result"`
-	Status        int                           `json:"status"`
 }
 
 func New() *NSO {
 	return &NSO{&http.Client{}}
 }
 
-func randomBytes(n uint) []byte {
-	letter := []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-
+func randomBytes(n int) []byte {
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
+		b[i] = letterBytes[rand.Int63()%int64(len(letterBytes))]
 	}
 	return b
-}
-
-func safeBase64Encode(b []byte) string {
-	s := base64.StdEncoding.EncodeToString(b)
-	s = strings.ReplaceAll(s, "/", "_")
-	s = strings.ReplaceAll(s, "+", "-")
-	s = strings.ReplaceAll(s, "=", "")
-	return s
 }
 
 func generateAuthURL(state, sessionTokenCodeChallenge string) string {
@@ -205,12 +91,7 @@ func postJSON(url string, header *http.Header, body interface{}) ([]byte, error)
 	}
 	req.Header.Set("content-type", "application/json; charset=utf-8")
 
-	b, err := processRequest(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return b, nil
+	return processRequest(req)
 }
 
 func postForm(url string, header *http.Header, body *url.Values) ([]byte, error) {
@@ -229,12 +110,7 @@ func postForm(url string, header *http.Header, body *url.Values) ([]byte, error)
 	}
 	req.Header.Set("content-type", "application/x-www-form-urlencoded")
 
-	b, err := processRequest(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return b, err
+	return processRequest(req)
 }
 
 func getSessionToken(sessionTokenCode, sessionTokenCodeVerifier string) (*sessionTokenResponse, error) {
@@ -295,6 +171,7 @@ func callS2SAPI(token string, timestamp int64) (*s2sResponse, error) {
 	return &r, err
 }
 
+// https://github.com/frozenpandaman/splatnet2statink/wiki/api-docs
 func callFlapgAPI(iid, token, guid string, timestamp int64) (*flagpResponse, error) {
 	h, err := callS2SAPI(token, timestamp)
 	if err != nil {
@@ -385,10 +262,10 @@ func getWebServiseToken(accessToken, f, registrationToken, guid string, timestam
 
 func (n *NSO) Auth() error {
 	rand.Seed(time.Now().UnixNano())
-	state := safeBase64Encode(randomBytes(36))
-	sessionTokenCodeVerifier := safeBase64Encode(randomBytes(32))
+	state := base64.RawURLEncoding.EncodeToString(randomBytes(36))
+	sessionTokenCodeVerifier := base64.RawURLEncoding.EncodeToString(randomBytes(32))
 	hash := sha256.Sum256([]byte(sessionTokenCodeVerifier))
-	sessionTokenCodeChallenge := safeBase64Encode(hash[:])
+	sessionTokenCodeChallenge := base64.RawURLEncoding.EncodeToString(hash[:])
 	u := generateAuthURL(state, sessionTokenCodeChallenge)
 
 	fmt.Printf("authorize by visiting this url: %s\n", u)
@@ -425,13 +302,13 @@ func (n *NSO) Auth() error {
 		return err
 	}
 
-	accessToken := l.Result.WebAPIServerCredential.AccessToken
-	r, err = callFlapgAPI("app", accessToken, guid, timestamp)
+	token := l.Result.WebAPIServerCredential.AccessToken
+	r, err = callFlapgAPI("app", token, guid, timestamp)
 	if err != nil {
 		return err
 	}
 
-	w, err := getWebServiseToken(accessToken, r.Result.F, r.Result.P1, r.Result.P3, timestamp)
+	w, err := getWebServiseToken(token, r.Result.F, r.Result.P1, guid, timestamp)
 	if err != nil {
 		return err
 	}
