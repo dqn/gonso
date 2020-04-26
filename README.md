@@ -62,7 +62,7 @@ func main() {
 First time, you need to authenticate.
 
 ```bash
-authorize by visiting this url: https://accounts.nintendo.com/connect/1.0.0/authorize?xxx=xxx
+authenticate by visiting this url: https://accounts.nintendo.com/connect/1.0.0/authorize?xxx=xxx
 session token code: <input your session token code>
 ```
 

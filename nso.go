@@ -68,7 +68,7 @@ func login() (string, string) {
 	sessionTokenCodeChallenge := base64.RawURLEncoding.EncodeToString(hash[:])
 	u := generateAuthURL(state, sessionTokenCodeChallenge)
 
-	fmt.Printf("authorize by visiting this url: %s\n", u)
+	fmt.Printf("authenticate by visiting this url: %s\n", u)
 
 	var sessionTokenCode string
 	fmt.Print("session token code: ")
