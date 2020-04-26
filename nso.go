@@ -153,15 +153,16 @@ func safeBase64Encode(b []byte) string {
 
 func generateAuthURL(state, sessionTokenCodeChallenge string) string {
 	u, _ := url.Parse("https://accounts.nintendo.com/connect/1.0.0/authorize")
-	q := u.Query()
-	q.Set("state", state)
-	q.Set("redirect_uri", "npf71b963c1b7b6d119://auth")
-	q.Set("client_id", clientID)
-	q.Set("scope", "openid user user.birthday user.mii user.screenName")
-	q.Set("response_type", "session_token_code")
-	q.Set("session_token_code_challenge", sessionTokenCodeChallenge)
-	q.Set("session_token_code_challenge_method", "S256")
-	q.Set("theme", "login_form")
+	q := &url.Values{
+		"state":                               {state},
+		"redirect_uri":                        {"npf71b963c1b7b6d119://auth"},
+		"client_id":                           {clientID},
+		"scope":                               {"openid user user.birthday user.mii user.screenName"},
+		"response_type":                       {"session_token_code"},
+		"session_token_code_challenge":        {sessionTokenCodeChallenge},
+		"session_token_code_challenge_method": {"S256"},
+		"theme":                               {"login_form"},
+	}
 	u.RawQuery = q.Encode()
 
 	return u.String()
@@ -273,13 +274,13 @@ func getToken(sessionToken string) (*tokenResponse, error) {
 	return &r, err
 }
 
-func callS2SAPI(naIDToken string, timestamp int64) (*s2sResponse, error) {
+func callS2SAPI(token string, timestamp int64) (*s2sResponse, error) {
 	u := "https://elifessler.com/s2s/api/gen2"
 	header := &http.Header{
 		"User-Agent": {"user_agent/version.num"},
 	}
 	body := &url.Values{
-		"naIdToken": {naIDToken},
+		"naIdToken": {token},
 		"timestamp": {strconv.FormatInt(timestamp, 10)},
 	}
 
@@ -294,17 +295,22 @@ func callS2SAPI(naIDToken string, timestamp int64) (*s2sResponse, error) {
 	return &r, err
 }
 
-func callFlapgAPI(iid, idToken, guid, hash string, timestamp int64) (*flagpResponse, error) {
+func callFlapgAPI(iid, token, guid string, timestamp int64) (*flagpResponse, error) {
+	h, err := callS2SAPI(token, timestamp)
+	if err != nil {
+		return nil, err
+	}
+
 	u := "https://flapg.com/ika2/api/login?public"
 	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header = http.Header{
-		"x-token": {idToken},
+		"x-token": {token},
 		"x-time":  {strconv.FormatInt(timestamp, 10)},
 		"x-guid":  {guid},
-		"x-hash":  {hash},
+		"x-hash":  {h.Hash},
 		"x-ver":   {"3"},
 		"x-iid":   {iid},
 	}
@@ -401,19 +407,15 @@ func (n *NSO) Auth() error {
 		return err
 	}
 
-	timestamp := time.Now().Unix()
-	h, err := callS2SAPI(t.IDToken, timestamp)
-	if err != nil {
-		return err
-	}
-
 	uuid, err := uuid.NewRandom()
 	if err != nil {
 		return err
 	}
 
 	guid := uuid.String()
-	r, err := callFlapgAPI("nso", t.IDToken, guid, h.Hash, timestamp)
+	timestamp := time.Now().Unix()
+
+	r, err := callFlapgAPI("nso", t.IDToken, guid, timestamp)
 	if err != nil {
 		return err
 	}
@@ -424,12 +426,7 @@ func (n *NSO) Auth() error {
 	}
 
 	accessToken := l.Result.WebAPIServerCredential.AccessToken
-	h, err = callS2SAPI(accessToken, timestamp)
-	if err != nil {
-		return err
-	}
-
-	r, err = callFlapgAPI("app", accessToken, guid, h.Hash, timestamp)
+	r, err = callFlapgAPI("app", accessToken, guid, timestamp)
 	if err != nil {
 		return err
 	}
