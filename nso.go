@@ -167,6 +167,23 @@ func generateAuthURL(state, sessionTokenCodeChallenge string) string {
 	return u.String()
 }
 
+func processRequest(req *http.Request) ([]byte, error) {
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	println(string(b))
+
+	return b, nil
+}
+
 func postJSON(url string, header *http.Header, body interface{}) ([]byte, error) {
 	var buf *bytes.Buffer
 	if body != nil {
@@ -187,18 +204,10 @@ func postJSON(url string, header *http.Header, body interface{}) ([]byte, error)
 	}
 	req.Header.Set("content-type", "application/json; charset=utf-8")
 
-	resp, err := http.DefaultClient.Do(req)
+	b, err := processRequest(req)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	println(string(b))
 
 	return b, nil
 }
@@ -219,13 +228,7 @@ func postForm(url string, header *http.Header, body *url.Values) ([]byte, error)
 	}
 	req.Header.Set("content-type", "application/x-www-form-urlencoded")
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := processRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -234,46 +237,44 @@ func postForm(url string, header *http.Header, body *url.Values) ([]byte, error)
 }
 
 func getSessionToken(sessionTokenCode, sessionTokenCodeVerifier string) (*sessionTokenResponse, error) {
-	rawURL := "https://accounts.nintendo.com/connect/1.0.0/api/session_token"
+	u := "https://accounts.nintendo.com/connect/1.0.0/api/session_token"
 	body := &url.Values{
 		"client_id":                   {clientID},
 		"session_token_code":          {sessionTokenCode},
 		"session_token_code_verifier": {sessionTokenCodeVerifier},
 	}
-	b, err := postForm(rawURL, nil, body)
+	b, err := postForm(u, nil, body)
 	if err != nil {
 		return nil, err
 	}
 
-	var st sessionTokenResponse
-	json.Unmarshal(b, &st)
+	var r sessionTokenResponse
+	err = json.Unmarshal(b, &r)
 
-	return &st, nil
+	return &r, err
 }
 
 func getToken(sessionToken string) (*tokenResponse, error) {
-	rawURL := "https://accounts.nintendo.com/connect/1.0.0/api/token"
+	u := "https://accounts.nintendo.com/connect/1.0.0/api/token"
 	body := &tokenRequest{
 		clientID,
 		"urn:ietf:params:oauth:grant-type:jwt-bearer-session-token",
 		sessionToken,
 	}
 
-	b, err := postJSON(rawURL, nil, body)
+	b, err := postJSON(u, nil, body)
 	if err != nil {
 		return nil, err
 	}
 
 	var r tokenResponse
-	if err = json.Unmarshal(b, &r); err != nil {
-		return nil, err
-	}
+	err = json.Unmarshal(b, &r)
 
-	return &r, nil
+	return &r, err
 }
 
 func callS2SAPI(naIDToken string, timestamp int64) (*s2sResponse, error) {
-	rawURL := "https://elifessler.com/s2s/api/gen2"
+	u := "https://elifessler.com/s2s/api/gen2"
 	header := &http.Header{
 		"User-Agent": {"user_agent/version.num"},
 	}
@@ -282,51 +283,45 @@ func callS2SAPI(naIDToken string, timestamp int64) (*s2sResponse, error) {
 		"timestamp": {strconv.FormatInt(timestamp, 10)},
 	}
 
-	b, err := postForm(rawURL, header, body)
+	b, err := postForm(u, header, body)
 	if err != nil {
 		return nil, err
 	}
 
-	var s s2sResponse
-	json.Unmarshal(b, &s)
+	var r s2sResponse
+	err = json.Unmarshal(b, &r)
 
-	return &s, err
+	return &r, err
 }
 
 func callFlapgAPI(iid, idToken, guid, hash string, timestamp int64) (*flagpResponse, error) {
-	rawURL := "https://flapg.com/ika2/api/login?public"
-	req, err := http.NewRequest("GET", rawURL, nil)
+	u := "https://flapg.com/ika2/api/login?public"
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = http.Header{
+		"x-token": {idToken},
+		"x-time":  {strconv.FormatInt(timestamp, 10)},
+		"x-guid":  {guid},
+		"x-hash":  {hash},
+		"x-ver":   {"3"},
+		"x-iid":   {iid},
+	}
+
+	b, err := processRequest(req)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("x-token", idToken)
-	req.Header.Set("x-time", strconv.FormatInt(timestamp, 10))
-	req.Header.Set("x-guid", guid)
-	req.Header.Set("x-hash", hash)
-	req.Header.Set("x-ver", "3")
-	req.Header.Set("x-iid", iid)
+	var r flagpResponse
+	err = json.Unmarshal(b, &r)
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var t flagpResponse
-	json.Unmarshal(b, &t)
-	println(string(b))
-
-	return &t, nil
+	return &r, err
 }
 
 func login(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
-	rawURL := "https://api-lp1.znc.srv.nintendo.net/v1/Account/Login"
+	u := "https://api-lp1.znc.srv.nintendo.net/v1/Account/Login"
 	header := &http.Header{
 		"x-productversion": {"1.6.1.2"},
 		"x-platform":       {"Android"},
@@ -343,21 +338,19 @@ func login(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
 		},
 	}
 
-	b, err := postJSON(rawURL, header, body)
+	b, err := postJSON(u, header, body)
 	if err != nil {
 		return nil, err
 	}
 
 	var r loginResponse
-	if err = json.Unmarshal(b, &r); err != nil {
-		return nil, err
-	}
+	err = json.Unmarshal(b, &r)
 
-	return &r, nil
+	return &r, err
 }
 
 func getWebServiseToken(accessToken, f, registrationToken, guid string, timestamp int64) (*webServiceTokenResponse, error) {
-	rawURL := "https://api-lp1.znc.srv.nintendo.net/v2/Game/GetWebServiceToken"
+	u := "https://api-lp1.znc.srv.nintendo.net/v2/Game/GetWebServiceToken"
 	header := &http.Header{
 		"authorization":    {fmt.Sprintf("Bearer %s", accessToken)},
 		"x-productversion": {"1.6.1.2"},
@@ -373,17 +366,15 @@ func getWebServiseToken(accessToken, f, registrationToken, guid string, timestam
 		},
 	}
 
-	b, err := postJSON(rawURL, header, body)
+	b, err := postJSON(u, header, body)
 	if err != nil {
 		return nil, err
 	}
 
 	var r webServiceTokenResponse
-	if err = json.Unmarshal(b, &r); err != nil {
-		return nil, err
-	}
+	err = json.Unmarshal(b, &r)
 
-	return &r, nil
+	return &r, err
 }
 
 func (n *NSO) Auth() error {
