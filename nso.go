@@ -127,8 +127,6 @@ func processRequest(req *http.Request) ([]byte, error) {
 		return nil, err
 	}
 
-	println(string(b))
-
 	return b, nil
 }
 
@@ -152,7 +150,12 @@ func postJSON(url string, header *http.Header, body interface{}) ([]byte, error)
 	}
 	req.Header.Set("content-type", "application/json; charset=utf-8")
 
-	return processRequest(req)
+	b, err := processRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
 }
 
 func postForm(url string, header *http.Header, body *url.Values) ([]byte, error) {
@@ -171,7 +174,12 @@ func postForm(url string, header *http.Header, body *url.Values) ([]byte, error)
 	}
 	req.Header.Set("content-type", "application/x-www-form-urlencoded")
 
-	return processRequest(req)
+	b, err := processRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
 }
 
 func getSessionToken(sessionTokenCode, sessionTokenCodeVerifier string) (*sessionTokenResponse, error) {
@@ -187,9 +195,15 @@ func getSessionToken(sessionTokenCode, sessionTokenCodeVerifier string) (*sessio
 	}
 
 	var r sessionTokenResponse
-	err = json.Unmarshal(b, &r)
+	if err = json.Unmarshal(b, &r); err != nil {
+		return nil, err
+	}
 
-	return &r, err
+	if r.Error != "" {
+		return nil, fmt.Errorf(r.Error)
+	}
+
+	return &r, nil
 }
 
 func getToken(sessionToken string) (*tokenResponse, error) {
@@ -206,9 +220,15 @@ func getToken(sessionToken string) (*tokenResponse, error) {
 	}
 
 	var r tokenResponse
-	err = json.Unmarshal(b, &r)
+	if err = json.Unmarshal(b, &r); err != nil {
+		return nil, err
+	}
 
-	return &r, err
+	if r.Error != "" {
+		return nil, fmt.Errorf(r.Error)
+	}
+
+	return &r, nil
 }
 
 func callS2SAPI(token string, timestamp int64) (*s2sResponse, error) {
@@ -227,9 +247,15 @@ func callS2SAPI(token string, timestamp int64) (*s2sResponse, error) {
 	}
 
 	var r s2sResponse
-	err = json.Unmarshal(b, &r)
+	if err = json.Unmarshal(b, &r); err != nil {
+		return nil, err
+	}
 
-	return &r, err
+	if r.Error != "" {
+		return nil, fmt.Errorf(r.Error)
+	}
+
+	return &r, nil
 }
 
 // https://github.com/frozenpandaman/splatnet2statink/wiki/api-docs
@@ -259,9 +285,15 @@ func callFlapgAPI(iid, token, guid string, timestamp int64) (*flagpResponse, err
 	}
 
 	var r flagpResponse
-	err = json.Unmarshal(b, &r)
+	if err = json.Unmarshal(b, &r); err != nil {
+		return nil, err
+	}
 
-	return &r, err
+	if r.Error != "" {
+		return nil, fmt.Errorf(r.Error)
+	}
+
+	return &r, nil
 }
 
 func loginNSOApp(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
@@ -288,9 +320,15 @@ func loginNSOApp(idToken, f, guid string, timestamp int64) (*loginResponse, erro
 	}
 
 	var r loginResponse
-	err = json.Unmarshal(b, &r)
+	if err = json.Unmarshal(b, &r); err != nil {
+		return nil, err
+	}
 
-	return &r, err
+	if r.Error != "" {
+		return nil, fmt.Errorf(r.Error)
+	}
+
+	return &r, nil
 }
 
 func getWebServiseToken(accessToken, f, registrationToken, guid string, timestamp int64) (*webServiceTokenResponse, error) {
@@ -316,9 +354,15 @@ func getWebServiseToken(accessToken, f, registrationToken, guid string, timestam
 	}
 
 	var r webServiceTokenResponse
-	err = json.Unmarshal(b, &r)
+	if err = json.Unmarshal(b, &r); err != nil {
+		return nil, err
+	}
 
-	return &r, err
+	if r.Error != "" {
+		return nil, fmt.Errorf(r.Error)
+	}
+
+	return &r, nil
 }
 
 func (n *NSO) Auth() error {

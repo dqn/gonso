@@ -3,6 +3,7 @@ package nso
 type sessionTokenResponse struct {
 	Code         string `json:"code"`
 	SessionToken string `json:"session_token"`
+	Error        string `json:"error"`
 }
 
 type tokenRequest struct {
@@ -17,6 +18,7 @@ type tokenResponse struct {
 	IDToken     string   `json:"id_token"`
 	Scope       []string `json:"scope"`
 	TokenType   string   `json:"token_type"`
+	Error       string   `json:"error"`
 }
 
 type loginRequestParameter struct {
@@ -56,7 +58,8 @@ type webApiServerCredential struct {
 }
 
 type s2sResponse struct {
-	Hash string `json:"hash"`
+	Hash  string `json:"hash"`
+	Error string `json:"error"`
 }
 
 type flagpResult struct {
@@ -68,6 +71,7 @@ type flagpResult struct {
 
 type flagpResponse struct {
 	Result flagpResult `json:"result"`
+	Error  string      `json:"error"`
 }
 
 type loginResponseResult struct {
@@ -80,6 +84,7 @@ type loginResponse struct {
 	CorrelationID string              `json:"correlationId"`
 	Result        loginResponseResult `json:"result"`
 	Status        int                 `json:"status"`
+	Error         string              `json:"error"`
 }
 
 type webServiceTokenRequestParameter struct {
@@ -103,4 +108,5 @@ type webServiceTokenResponse struct {
 	CorrelationID string                        `json:"correlationId"`
 	Result        webServiceTokenResponseResult `json:"result"`
 	Status        int                           `json:"status"`
+	Error         string                        `json:"error"`
 }
