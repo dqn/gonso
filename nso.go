@@ -1,8 +1,11 @@
 package nso
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -14,6 +17,25 @@ var clientID = "71b963c1b7b6d119"
 
 type NSO struct {
 	client *http.Client
+}
+
+type sessionTokenResponse struct {
+	Code         string `json:"code"`
+	SessionToken string `json:"session_token"`
+}
+
+type tokenRequest struct {
+	ClientID     string `json:"client_id"`
+	GrantType    string `json:"grant_type"`
+	SessionToken string `json:"session_token"`
+}
+
+type tokenResponse struct {
+	AccessToken string   `json:"access_token"`
+	ExpiresIn   uint     `json:"expires_in"`
+	IDToken     string   `json:"id_token"`
+	Scope       []string `json:"scope"`
+	TokenType   string   `json:"token_type"`
 }
 
 func New() *NSO {
@@ -54,45 +76,94 @@ func generateAuthURL(state, sessionTokenCodeChallenge string) string {
 	return u.String()
 }
 
-func (n *NSO) Auth() string {
+func fetchSessionToken(sessionTokenCode, sessionTokenCodeVerifier string) (*sessionTokenResponse, error) {
+	rawURL := "https://accounts.nintendo.com/connect/1.0.0/api/session_token"
+	values := &url.Values{}
+	values.Set("client_id", clientID)
+	values.Set("session_token_code", sessionTokenCode)
+	values.Set("session_token_code_verifier", sessionTokenCodeVerifier)
+
+	req, err := http.NewRequest("POST", rawURL, strings.NewReader(values.Encode()))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var st sessionTokenResponse
+	json.Unmarshal(b, &st)
+
+	return &st, nil
+}
+
+func fetchToken(sessionToken string) (*tokenResponse, error) {
+	rawURL := "https://accounts.nintendo.com/connect/1.0.0/api/token"
+	rawJSON, err := json.Marshal(tokenRequest{
+		clientID,
+		"urn:ietf:params:oauth:grant-type:jwt-bearer-session-token",
+		sessionToken,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", rawURL, bytes.NewBuffer(rawJSON))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var t tokenResponse
+	json.Unmarshal(b, &t)
+
+	return &t, nil
+}
+
+func (n *NSO) Auth() error {
 	state := safeBase64Encode(randomBytes(36))
 	sessionTokenCodeVerifier := safeBase64Encode(randomBytes(32))
 	hash := sha256.Sum256([]byte(sessionTokenCodeVerifier))
 	sessionTokenCodeChallenge := safeBase64Encode(hash[:])
 	u := generateAuthURL(state, sessionTokenCodeChallenge)
 
-	println(u)
+	fmt.Printf("authorize by visiting this url: %s\n", u)
 
-	return ""
-}
+	var sessionTokenCode string
+	fmt.Print("session token code: ")
+	fmt.Scanf("%s", &sessionTokenCode)
 
-func (n *NSO) fetchSessionToken(sessionTokenCode, sessionTokenCodeVerifier string) error {
-	u := "https://accounts.nintendo.com/connect/1.0.0/api/session_token"
-
-	values := &url.Values{}
-	values.Set("client_id", clientID)
-	values.Set("session_token_code", sessionTokenCode)
-	values.Set("session_token_code_verifier", sessionTokenCodeVerifier)
-
-	req, err := http.NewRequest("POST", u, strings.NewReader(values.Encode()))
+	st, err := fetchSessionToken(sessionTokenCode, sessionTokenCodeVerifier)
 	if err != nil {
 		return err
 	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := n.client.Do(req)
+	t, err := fetchToken(st.SessionToken)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	println(string(b))
+	fmt.Println(t)
 
 	return nil
 }
