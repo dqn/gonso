@@ -10,7 +10,9 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 )
 
 var clientID = "71b963c1b7b6d119"
@@ -36,6 +38,61 @@ type tokenResponse struct {
 	IDToken     string   `json:"id_token"`
 	Scope       []string `json:"scope"`
 	TokenType   string   `json:"token_type"`
+}
+
+type parameter struct {
+	F          string `json:"f"`
+	Language   string `json:"language"`
+	NaBirthday string `json:"naBirthday"`
+	NaCountry  string `json:"naCountry"`
+	NaIDToken  string `json:"naIdToken"`
+	RequestID  string `json:"requestId"`
+	Timestamp  int64  `json:"timestamp"`
+}
+
+type loginRequest struct {
+	Parameter parameter `json:"parameter"`
+}
+
+type firebaseCredential struct {
+	AccessToken string `json:"accessToken"`
+	ExpiresIn   int    `json:"expiresIn"`
+}
+
+type membership struct {
+	Active bool `json:"active"`
+}
+
+type user struct {
+	ID         int64      `json:"id"`
+	ImageURI   string     `json:"imageUri"`
+	Membership membership `json:"membership"`
+	Name       string     `json:"name"`
+	SupportID  string     `json:"supportId"`
+}
+
+type webApiServerCredential struct {
+	AccessToken string `json:"accessToken"`
+	ExpiresIn   int    `json:"expiresIn"`
+}
+
+type result struct {
+	FirebaseCredential     firebaseCredential     `json:"firebaseCredential"`
+	User                   user                   `json:"user"`
+	WebAPIServerCredential webApiServerCredential `json:"webApiServerCredential"`
+}
+
+type s2sResponse struct {
+	Hash string `json:"hash"`
+}
+
+type flagpResponse struct {
+}
+
+type loginResponse struct {
+	CorrelationID string `json:"correlationId"`
+	Result        result `json:"result"`
+	Status        int    `json:"status"`
 }
 
 func New() *NSO {
@@ -142,6 +199,115 @@ func fetchToken(sessionToken string) (*tokenResponse, error) {
 	return &t, nil
 }
 
+func fetchHashByS2S(naIDToken string, timestamp int64) (*s2sResponse, error) {
+	rawURL := "https://elifessler.com/s2s/api/gen2"
+	values := &url.Values{}
+	values.Set("naIdToken", naIDToken)
+	values.Set("timestamp", strconv.FormatInt(timestamp, 10))
+
+	req, err := http.NewRequest("POST", rawURL, strings.NewReader(values.Encode()))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", "user_agent/version.num")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var s s2sResponse
+	json.Unmarshal(b, &s)
+
+	return &s, err
+}
+
+// func fetchRequestIdAndRequestID(idToken, hash string, unix int64) (*flagpResponse, error) {
+// 	rawURL := "https://flapg.com/ika2/api/login?public"
+// 	req, err := http.NewRequest("POST", rawURL, bytes.NewBuffer(rawJSON))
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	req.Header.Set("x-token", idToken)
+// 	req.Header.Set("x-time", strconv.FormatInt(unix, 10))
+// 	req.Header.Set("x-guid", "")
+// 	req.Header.Set("x-hash", hash)
+// 	req.Header.Set("x-ver", "3")
+// 	req.Header.Set("x-iid", "nso")
+
+// 	resp, err := http.DefaultClient.Do(req)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer resp.Body.Close()
+
+// 	b, err := ioutil.ReadAll(resp.Body)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	var t tokenResponse
+// 	json.Unmarshal(b, &t)
+
+// 	return &t, nil
+// }
+
+func login(idToken string) (*loginResponse, error) {
+	_, err := fetchHashByS2S(idToken, time.Now().Unix())
+	if err != nil {
+		return nil, err
+	}
+	return nil, nil
+	rawURL := "https://api-lp1.znc.srv.nintendo.net/v1/Account/Login"
+	rawJSON, err := json.Marshal(loginRequest{
+		parameter{
+			"1e3de1eedef9952d1eb7ecb6ae520fabc5828d9c9d2fef9f89c889e68b15358b40e109758f954d2c746511cf",
+			"ja-JP",
+			"1998-10-06",
+			"JP",
+			idToken,
+			"28536744-db82-47e4-a30e-1d2dacbd1e24",
+			time.Now().Unix(),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", rawURL, bytes.NewBuffer(rawJSON))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var l loginResponse
+	println(string(b))
+	json.Unmarshal(b, &l)
+
+	return &l, nil
+}
+
 func (n *NSO) Auth() error {
 	state := safeBase64Encode(randomBytes(36))
 	sessionTokenCodeVerifier := safeBase64Encode(randomBytes(32))
@@ -163,7 +329,11 @@ func (n *NSO) Auth() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(t)
+	l, err := login(t.IDToken)
+	if err != nil {
+		return err
+	}
+	fmt.Println(l)
 
 	return nil
 }
