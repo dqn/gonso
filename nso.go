@@ -42,7 +42,7 @@ type tokenResponse struct {
 	TokenType   string   `json:"token_type"`
 }
 
-type parameter struct {
+type loginRequestParameter struct {
 	F          string `json:"f"`
 	Language   string `json:"language"`
 	NaBirthday string `json:"naBirthday"`
@@ -53,7 +53,7 @@ type parameter struct {
 }
 
 type loginRequest struct {
-	Parameter parameter `json:"parameter"`
+	Parameter loginRequestParameter `json:"parameter"`
 }
 
 type firebaseCredential struct {
@@ -78,12 +78,6 @@ type webApiServerCredential struct {
 	ExpiresIn   int    `json:"expiresIn"`
 }
 
-type result struct {
-	FirebaseCredential     firebaseCredential     `json:"firebaseCredential"`
-	User                   user                   `json:"user"`
-	WebAPIServerCredential webApiServerCredential `json:"webApiServerCredential"`
-}
-
 type s2sResponse struct {
 	Hash string `json:"hash"`
 }
@@ -99,10 +93,39 @@ type flagpResponse struct {
 	Result flagpResult `json:"result"`
 }
 
+type loginResponseResult struct {
+	FirebaseCredential     firebaseCredential     `json:"firebaseCredential"`
+	User                   user                   `json:"user"`
+	WebAPIServerCredential webApiServerCredential `json:"webApiServerCredential"`
+}
+
 type loginResponse struct {
-	CorrelationID string `json:"correlationId"`
-	Result        result `json:"result"`
-	Status        int    `json:"status"`
+	CorrelationID string              `json:"correlationId"`
+	Result        loginResponseResult `json:"result"`
+	Status        int                 `json:"status"`
+}
+
+type webServiceTokenRequestParameter struct {
+	F                 string `json:"f"`
+	ID                int64  `json:"id"`
+	RegistrationToken string `json:"registrationToken"`
+	RequestID         string `json:"requestId"`
+	Timestamp         int64  `json:"timestamp"`
+}
+
+type webServiceTokenRequest struct {
+	Parameter webServiceTokenRequestParameter `json:"parameter"`
+}
+
+type webServiceTokenResponseResult struct {
+	AccessToken string `json:"accessToken"`
+	ExpiresIn   int    `json:"expiresIn"`
+}
+
+type webServiceTokenResponse struct {
+	CorrelationID string                        `json:"correlationId"`
+	Result        webServiceTokenResponseResult `json:"result"`
+	Status        int                           `json:"status"`
 }
 
 func New() *NSO {
@@ -143,7 +166,7 @@ func generateAuthURL(state, sessionTokenCodeChallenge string) string {
 	return u.String()
 }
 
-func fetchSessionToken(sessionTokenCode, sessionTokenCodeVerifier string) (*sessionTokenResponse, error) {
+func getSessionToken(sessionTokenCode, sessionTokenCodeVerifier string) (*sessionTokenResponse, error) {
 	rawURL := "https://accounts.nintendo.com/connect/1.0.0/api/session_token"
 	values := &url.Values{}
 	values.Set("client_id", clientID)
@@ -174,7 +197,7 @@ func fetchSessionToken(sessionTokenCode, sessionTokenCodeVerifier string) (*sess
 	return &st, nil
 }
 
-func fetchToken(sessionToken string) (*tokenResponse, error) {
+func getToken(sessionToken string) (*tokenResponse, error) {
 	rawURL := "https://accounts.nintendo.com/connect/1.0.0/api/token"
 	rawJSON, err := json.Marshal(tokenRequest{
 		clientID,
@@ -209,7 +232,7 @@ func fetchToken(sessionToken string) (*tokenResponse, error) {
 	return &t, nil
 }
 
-func fetchHashByS2S(naIDToken string, timestamp int64) (*s2sResponse, error) {
+func callS2SAPI(naIDToken string, timestamp int64) (*s2sResponse, error) {
 	rawURL := "https://elifessler.com/s2s/api/gen2"
 	values := &url.Values{}
 	values.Set("naIdToken", naIDToken)
@@ -241,7 +264,7 @@ func fetchHashByS2S(naIDToken string, timestamp int64) (*s2sResponse, error) {
 	return &s, err
 }
 
-func fetchRequestIDAndF(idToken, guid, hash string, timestamp int64) (*flagpResponse, error) {
+func callFlapgAPI(iid, idToken, guid, hash string, timestamp int64) (*flagpResponse, error) {
 	rawURL := "https://flapg.com/ika2/api/login?public"
 	req, err := http.NewRequest("GET", rawURL, nil)
 	if err != nil {
@@ -253,7 +276,7 @@ func fetchRequestIDAndF(idToken, guid, hash string, timestamp int64) (*flagpResp
 	req.Header.Set("x-guid", guid)
 	req.Header.Set("x-hash", hash)
 	req.Header.Set("x-ver", "3")
-	req.Header.Set("x-iid", "nso")
+	req.Header.Set("x-iid", iid)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -276,7 +299,7 @@ func fetchRequestIDAndF(idToken, guid, hash string, timestamp int64) (*flagpResp
 func login(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
 	rawURL := "https://api-lp1.znc.srv.nintendo.net/v1/Account/Login"
 	rawJSON, err := json.Marshal(loginRequest{
-		parameter{
+		loginRequestParameter{
 			f,
 			"ja-JP",
 			"1998-10-06",
@@ -317,6 +340,49 @@ func login(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
 	return &l, nil
 }
 
+func getWebServiseToken(accessToken, f, registrationToken, guid string, timestamp int64) (*webServiceTokenResponse, error) {
+	rawURL := "https://api-lp1.znc.srv.nintendo.net/v2/Game/GetWebServiceToken"
+	rawJSON, err := json.Marshal(webServiceTokenRequest{
+		webServiceTokenRequestParameter{
+			f,
+			4953919198265344,
+			registrationToken,
+			guid,
+			timestamp,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", rawURL, bytes.NewBuffer(rawJSON))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("content-type", "application/json; charset=utf-8")
+	req.Header.Set("authorization", fmt.Sprintf("Bearer %s", accessToken))
+	req.Header.Set("x-productversion", "1.6.1.2")
+	req.Header.Set("x-platform", "Android")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var w webServiceTokenResponse
+	json.Unmarshal(b, &w)
+	println(string(b))
+
+	return &w, nil
+}
+
 func (n *NSO) Auth() error {
 	rand.Seed(time.Now().UnixNano())
 	state := safeBase64Encode(randomBytes(36))
@@ -331,18 +397,18 @@ func (n *NSO) Auth() error {
 	fmt.Print("session token code: ")
 	fmt.Scanf("%s", &sessionTokenCode)
 
-	st, err := fetchSessionToken(sessionTokenCode, sessionTokenCodeVerifier)
+	st, err := getSessionToken(sessionTokenCode, sessionTokenCodeVerifier)
 	if err != nil {
 		return err
 	}
 
-	t, err := fetchToken(st.SessionToken)
+	t, err := getToken(st.SessionToken)
 	if err != nil {
 		return err
 	}
 
 	timestamp := time.Now().Unix()
-	h, err := fetchHashByS2S(t.IDToken, timestamp)
+	h, err := callS2SAPI(t.IDToken, timestamp)
 	if err != nil {
 		return err
 	}
@@ -353,7 +419,7 @@ func (n *NSO) Auth() error {
 	}
 
 	guid := uuid.String()
-	r, err := fetchRequestIDAndF(t.IDToken, guid, h.Hash, timestamp)
+	r, err := callFlapgAPI("nso", t.IDToken, guid, h.Hash, timestamp)
 	if err != nil {
 		return err
 	}
@@ -363,7 +429,23 @@ func (n *NSO) Auth() error {
 		return err
 	}
 
-	fmt.Println(l)
+	accessToken := l.Result.WebAPIServerCredential.AccessToken
+	h, err = callS2SAPI(accessToken, timestamp)
+	if err != nil {
+		return err
+	}
+
+	r, err = callFlapgAPI("app", accessToken, guid, h.Hash, timestamp)
+	if err != nil {
+		return err
+	}
+
+	w, err := getWebServiseToken(accessToken, r.Result.F, r.Result.P1, r.Result.P3, timestamp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(w)
 
 	return nil
 }
