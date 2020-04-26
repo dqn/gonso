@@ -296,6 +296,8 @@ func login(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set("x-productversion", "1.6.1.2")
+	req.Header.Set("x-platform", "iOS")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
