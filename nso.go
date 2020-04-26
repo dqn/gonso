@@ -365,13 +365,13 @@ func getWebServiseToken(accessToken, f, registrationToken, guid string, timestam
 	return &r, nil
 }
 
-func (n *NSO) Auth() error {
+func (n *NSO) Auth() (string, error) {
 	c, err := loadCredential()
 	if err != nil {
 		sessionTokenCode, sessionTokenCodeVerifier := login()
 		st, err := getSessionToken(sessionTokenCode, sessionTokenCodeVerifier)
 		if err != nil {
-			return err
+			return "", err
 		}
 		c = &credential{st.SessionToken}
 		defer saveCredential(c)
@@ -379,12 +379,12 @@ func (n *NSO) Auth() error {
 
 	t, err := getToken(c.SessionToken)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	uuid, err := uuid.NewRandom()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	guid := uuid.String()
@@ -392,26 +392,24 @@ func (n *NSO) Auth() error {
 
 	r, err := callFlapgAPI("nso", t.IDToken, guid, timestamp)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	l, err := loginNSOApp(t.IDToken, r.Result.F, guid, timestamp)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	token := l.Result.WebAPIServerCredential.AccessToken
 	r, err = callFlapgAPI("app", token, guid, timestamp)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	w, err := getWebServiseToken(token, r.Result.F, r.Result.P1, guid, timestamp)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	fmt.Println(w)
-
-	return nil
+	return w.Result.AccessToken, nil
 }
