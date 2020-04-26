@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -167,12 +168,16 @@ func generateAuthURL(state, sessionTokenCodeChallenge string) string {
 }
 
 func postJSON(url string, header *http.Header, body interface{}) ([]byte, error) {
-	rawJSON, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
+	var buf *bytes.Buffer
+	if body != nil {
+		rawJSON, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		buf = bytes.NewBuffer(rawJSON)
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(rawJSON))
+	req, err := http.NewRequest("POST", url, buf)
 	if err != nil {
 		return nil, err
 	}
@@ -198,19 +203,21 @@ func postJSON(url string, header *http.Header, body interface{}) ([]byte, error)
 	return b, nil
 }
 
-func getSessionToken(sessionTokenCode, sessionTokenCodeVerifier string) (*sessionTokenResponse, error) {
-	rawURL := "https://accounts.nintendo.com/connect/1.0.0/api/session_token"
-	values := &url.Values{}
-	values.Set("client_id", clientID)
-	values.Set("session_token_code", sessionTokenCode)
-	values.Set("session_token_code_verifier", sessionTokenCodeVerifier)
+func postForm(url string, header *http.Header, body *url.Values) ([]byte, error) {
+	var reader io.Reader
+	if body != nil {
+		reader = strings.NewReader(body.Encode())
+	}
 
-	req, err := http.NewRequest("POST", rawURL, strings.NewReader(values.Encode()))
+	req, err := http.NewRequest("POST", url, reader)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if header != nil {
+		req.Header = *header
+	}
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -223,6 +230,21 @@ func getSessionToken(sessionTokenCode, sessionTokenCodeVerifier string) (*sessio
 		return nil, err
 	}
 
+	return b, err
+}
+
+func getSessionToken(sessionTokenCode, sessionTokenCodeVerifier string) (*sessionTokenResponse, error) {
+	rawURL := "https://accounts.nintendo.com/connect/1.0.0/api/session_token"
+	body := &url.Values{
+		"client_id":                   {clientID},
+		"session_token_code":          {sessionTokenCode},
+		"session_token_code_verifier": {sessionTokenCodeVerifier},
+	}
+	b, err := postForm(rawURL, nil, body)
+	if err != nil {
+		return nil, err
+	}
+
 	var st sessionTokenResponse
 	json.Unmarshal(b, &st)
 
@@ -231,13 +253,13 @@ func getSessionToken(sessionTokenCode, sessionTokenCodeVerifier string) (*sessio
 
 func getToken(sessionToken string) (*tokenResponse, error) {
 	rawURL := "https://accounts.nintendo.com/connect/1.0.0/api/token"
-	body := tokenRequest{
+	body := &tokenRequest{
 		clientID,
 		"urn:ietf:params:oauth:grant-type:jwt-bearer-session-token",
 		sessionToken,
 	}
 
-	b, err := postJSON(rawURL, nil, &body)
+	b, err := postJSON(rawURL, nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -252,32 +274,21 @@ func getToken(sessionToken string) (*tokenResponse, error) {
 
 func callS2SAPI(naIDToken string, timestamp int64) (*s2sResponse, error) {
 	rawURL := "https://elifessler.com/s2s/api/gen2"
-	values := &url.Values{}
-	values.Set("naIdToken", naIDToken)
-	values.Set("timestamp", strconv.FormatInt(timestamp, 10))
-
-	req, err := http.NewRequest("POST", rawURL, strings.NewReader(values.Encode()))
-	if err != nil {
-		return nil, err
+	header := &http.Header{
+		"User-Agent": {"user_agent/version.num"},
+	}
+	body := &url.Values{
+		"naIdToken": {naIDToken},
+		"timestamp": {strconv.FormatInt(timestamp, 10)},
 	}
 
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "user_agent/version.num")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := postForm(rawURL, header, body)
 	if err != nil {
 		return nil, err
 	}
 
 	var s s2sResponse
 	json.Unmarshal(b, &s)
-	println(string(b))
 
 	return &s, err
 }
@@ -316,11 +327,11 @@ func callFlapgAPI(iid, idToken, guid, hash string, timestamp int64) (*flagpRespo
 
 func login(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
 	rawURL := "https://api-lp1.znc.srv.nintendo.net/v1/Account/Login"
-	header := http.Header{
+	header := &http.Header{
 		"x-productversion": {"1.6.1.2"},
 		"x-platform":       {"Android"},
 	}
-	body := loginRequest{
+	body := &loginRequest{
 		loginRequestParameter{
 			f,
 			"ja-JP",
@@ -332,7 +343,7 @@ func login(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
 		},
 	}
 
-	b, err := postJSON(rawURL, &header, &body)
+	b, err := postJSON(rawURL, header, body)
 	if err != nil {
 		return nil, err
 	}
@@ -347,12 +358,12 @@ func login(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
 
 func getWebServiseToken(accessToken, f, registrationToken, guid string, timestamp int64) (*webServiceTokenResponse, error) {
 	rawURL := "https://api-lp1.znc.srv.nintendo.net/v2/Game/GetWebServiceToken"
-	header := http.Header{
+	header := &http.Header{
 		"authorization":    {fmt.Sprintf("Bearer %s", accessToken)},
 		"x-productversion": {"1.6.1.2"},
 		"x-platform":       {"Android"},
 	}
-	body := webServiceTokenRequest{
+	body := &webServiceTokenRequest{
 		webServiceTokenRequestParameter{
 			f,
 			4953919198265344,
@@ -362,7 +373,7 @@ func getWebServiseToken(accessToken, f, registrationToken, guid string, timestam
 		},
 	}
 
-	b, err := postJSON(rawURL, &header, &body)
+	b, err := postJSON(rawURL, header, body)
 	if err != nil {
 		return nil, err
 	}
