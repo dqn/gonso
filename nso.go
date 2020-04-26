@@ -295,9 +295,9 @@ func login(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
 		return nil, err
 	}
 
-	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set("content-type", "application/json; charset=utf-8")
 	req.Header.Set("x-productversion", "1.6.1.2")
-	req.Header.Set("x-platform", "iOS")
+	req.Header.Set("x-platform", "Android")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -358,10 +358,6 @@ func (n *NSO) Auth() error {
 		return err
 	}
 
-	println(t.IDToken)
-	println(r.Result.F)
-	println(guid)
-	println(timestamp)
 	l, err := login(t.IDToken, r.Result.F, guid, timestamp)
 	if err != nil {
 		return err
