@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 var clientID = "71b963c1b7b6d119"
@@ -86,7 +88,15 @@ type s2sResponse struct {
 	Hash string `json:"hash"`
 }
 
+type flagpResult struct {
+	F  string `json:"f"`
+	P1 string `json:"p1"`
+	P2 string `json:"p2"`
+	P3 string `json:"p3"`
+}
+
 type flagpResponse struct {
+	Result flagpResult `json:"result"`
 }
 
 type loginResponse struct {
@@ -226,57 +236,54 @@ func fetchHashByS2S(naIDToken string, timestamp int64) (*s2sResponse, error) {
 
 	var s s2sResponse
 	json.Unmarshal(b, &s)
+	println(string(b))
 
 	return &s, err
 }
 
-// func fetchRequestIdAndRequestID(idToken, hash string, unix int64) (*flagpResponse, error) {
-// 	rawURL := "https://flapg.com/ika2/api/login?public"
-// 	req, err := http.NewRequest("POST", rawURL, bytes.NewBuffer(rawJSON))
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	req.Header.Set("x-token", idToken)
-// 	req.Header.Set("x-time", strconv.FormatInt(unix, 10))
-// 	req.Header.Set("x-guid", "")
-// 	req.Header.Set("x-hash", hash)
-// 	req.Header.Set("x-ver", "3")
-// 	req.Header.Set("x-iid", "nso")
-
-// 	resp, err := http.DefaultClient.Do(req)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer resp.Body.Close()
-
-// 	b, err := ioutil.ReadAll(resp.Body)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	var t tokenResponse
-// 	json.Unmarshal(b, &t)
-
-// 	return &t, nil
-// }
-
-func login(idToken string) (*loginResponse, error) {
-	_, err := fetchHashByS2S(idToken, time.Now().Unix())
+func fetchRequestIDAndF(idToken, guid, hash string, timestamp int64) (*flagpResponse, error) {
+	rawURL := "https://flapg.com/ika2/api/login?public"
+	req, err := http.NewRequest("GET", rawURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+
+	req.Header.Set("x-token", idToken)
+	req.Header.Set("x-time", strconv.FormatInt(timestamp, 10))
+	req.Header.Set("x-guid", guid)
+	req.Header.Set("x-hash", hash)
+	req.Header.Set("x-ver", "3")
+	req.Header.Set("x-iid", "nso")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var t flagpResponse
+	json.Unmarshal(b, &t)
+	println(string(b))
+
+	return &t, nil
+}
+
+func login(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
 	rawURL := "https://api-lp1.znc.srv.nintendo.net/v1/Account/Login"
 	rawJSON, err := json.Marshal(loginRequest{
 		parameter{
-			"1e3de1eedef9952d1eb7ecb6ae520fabc5828d9c9d2fef9f89c889e68b15358b40e109758f954d2c746511cf",
+			f,
 			"ja-JP",
 			"1998-10-06",
 			"JP",
 			idToken,
-			"28536744-db82-47e4-a30e-1d2dacbd1e24",
-			time.Now().Unix(),
+			guid,
+			timestamp,
 		},
 	})
 	if err != nil {
@@ -302,13 +309,14 @@ func login(idToken string) (*loginResponse, error) {
 	}
 
 	var l loginResponse
-	println(string(b))
 	json.Unmarshal(b, &l)
+	println(string(b))
 
 	return &l, nil
 }
 
 func (n *NSO) Auth() error {
+	rand.Seed(time.Now().UnixNano())
 	state := safeBase64Encode(randomBytes(36))
 	sessionTokenCodeVerifier := safeBase64Encode(randomBytes(32))
 	hash := sha256.Sum256([]byte(sessionTokenCodeVerifier))
@@ -325,14 +333,38 @@ func (n *NSO) Auth() error {
 	if err != nil {
 		return err
 	}
+
 	t, err := fetchToken(st.SessionToken)
 	if err != nil {
 		return err
 	}
-	l, err := login(t.IDToken)
+
+	timestamp := time.Now().Unix()
+	h, err := fetchHashByS2S(t.IDToken, timestamp)
 	if err != nil {
 		return err
 	}
+
+	uuid, err := uuid.NewRandom()
+	if err != nil {
+		return err
+	}
+
+	guid := uuid.String()
+	r, err := fetchRequestIDAndF(t.IDToken, guid, h.Hash, timestamp)
+	if err != nil {
+		return err
+	}
+
+	println(t.IDToken)
+	println(r.Result.F)
+	println(guid)
+	println(timestamp)
+	l, err := login(t.IDToken, r.Result.F, guid, timestamp)
+	if err != nil {
+		return err
+	}
+
 	fmt.Println(l)
 
 	return nil
