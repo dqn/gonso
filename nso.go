@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -18,11 +19,16 @@ import (
 	"github.com/google/uuid"
 )
 
-const clientID = "71b963c1b7b6d119"
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const clientID = "71b963c1b7b6d119"
+const credentialPath = "./nso.json"
 
 type NSO struct {
 	client *http.Client
+}
+
+type credential struct {
+	SessionToken string `json:"session_token"`
 }
 
 func New() *NSO {
@@ -52,6 +58,61 @@ func generateAuthURL(state, sessionTokenCodeChallenge string) string {
 	u.RawQuery = q.Encode()
 
 	return u.String()
+}
+
+func login() (string, string) {
+	rand.Seed(time.Now().UnixNano())
+	state := base64.RawURLEncoding.EncodeToString(randomBytes(36))
+	sessionTokenCodeVerifier := base64.RawURLEncoding.EncodeToString(randomBytes(32))
+	hash := sha256.Sum256([]byte(sessionTokenCodeVerifier))
+	sessionTokenCodeChallenge := base64.RawURLEncoding.EncodeToString(hash[:])
+	u := generateAuthURL(state, sessionTokenCodeChallenge)
+
+	fmt.Printf("authorize by visiting this url: %s\n", u)
+
+	var sessionTokenCode string
+	fmt.Print("session token code: ")
+	fmt.Scanf("%s", &sessionTokenCode)
+
+	return sessionTokenCode, sessionTokenCodeVerifier
+}
+
+func saveCredential(c *credential) error {
+	raw, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	f, err := os.Create(credentialPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if _, err = f.Write(raw); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func loadCredential() (*credential, error) {
+	f, err := os.Open(credentialPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	b, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+
+	var c credential
+	if err = json.Unmarshal(b, &c); err != nil {
+		return nil, err
+	}
+
+	return &c, nil
 }
 
 func processRequest(req *http.Request) ([]byte, error) {
@@ -203,7 +264,7 @@ func callFlapgAPI(iid, token, guid string, timestamp int64) (*flagpResponse, err
 	return &r, err
 }
 
-func login(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
+func loginNSOApp(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
 	u := "https://api-lp1.znc.srv.nintendo.net/v1/Account/Login"
 	header := &http.Header{
 		"x-productversion": {"1.6.1.2"},
@@ -212,9 +273,9 @@ func login(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
 	body := &loginRequest{
 		loginRequestParameter{
 			f,
-			"ja-JP",
-			"1998-10-06",
-			"JP",
+			"en-US",
+			"1970-01-01",
+			"US",
 			idToken,
 			guid,
 			timestamp,
@@ -261,25 +322,18 @@ func getWebServiseToken(accessToken, f, registrationToken, guid string, timestam
 }
 
 func (n *NSO) Auth() error {
-	rand.Seed(time.Now().UnixNano())
-	state := base64.RawURLEncoding.EncodeToString(randomBytes(36))
-	sessionTokenCodeVerifier := base64.RawURLEncoding.EncodeToString(randomBytes(32))
-	hash := sha256.Sum256([]byte(sessionTokenCodeVerifier))
-	sessionTokenCodeChallenge := base64.RawURLEncoding.EncodeToString(hash[:])
-	u := generateAuthURL(state, sessionTokenCodeChallenge)
-
-	fmt.Printf("authorize by visiting this url: %s\n", u)
-
-	var sessionTokenCode string
-	fmt.Print("session token code: ")
-	fmt.Scanf("%s", &sessionTokenCode)
-
-	st, err := getSessionToken(sessionTokenCode, sessionTokenCodeVerifier)
+	c, err := loadCredential()
 	if err != nil {
-		return err
+		sessionTokenCode, sessionTokenCodeVerifier := login()
+		st, err := getSessionToken(sessionTokenCode, sessionTokenCodeVerifier)
+		if err != nil {
+			return err
+		}
+		c = &credential{st.SessionToken}
+		defer saveCredential(c)
 	}
 
-	t, err := getToken(st.SessionToken)
+	t, err := getToken(c.SessionToken)
 	if err != nil {
 		return err
 	}
@@ -297,7 +351,7 @@ func (n *NSO) Auth() error {
 		return err
 	}
 
-	l, err := login(t.IDToken, r.Result.F, guid, timestamp)
+	l, err := loginNSOApp(t.IDToken, r.Result.F, guid, timestamp)
 	if err != nil {
 		return err
 	}
