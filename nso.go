@@ -131,16 +131,16 @@ func processRequest(req *http.Request) ([]byte, error) {
 }
 
 func postJSON(url string, header *http.Header, body interface{}) ([]byte, error) {
-	var buf *bytes.Buffer
+	var reader io.Reader
 	if body != nil {
 		rawJSON, err := json.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
-		buf = bytes.NewBuffer(rawJSON)
+		reader = bytes.NewBuffer(rawJSON)
 	}
 
-	req, err := http.NewRequest("POST", url, buf)
+	req, err := http.NewRequest("POST", url, reader)
 	if err != nil {
 		return nil, err
 	}
