@@ -1,11 +1,11 @@
-# go-nso
+# gonso
 
 Nintendo Switch Online API wrapper
 
 ## Installation
 
 ```bash
-$ go get github.com/dqn/go-nso
+$ go get github.com/dqn/gonso
 ```
 
 ## Usage
@@ -19,7 +19,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/dqn/go-nso"
+	"github.com/dqn/gonso"
 )
 
 type ACNHUsers struct {
@@ -36,7 +36,7 @@ type ACNHUsers struct {
 }
 
 func main() {
-	n := nso.New()
+	n := gonso.New()
 	accessToken, err := n.Auth()
 	if err != nil {
 		panic("failed to authenticate")

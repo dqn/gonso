@@ -1,4 +1,4 @@
-module github.com/dqn/go-nso
+module github.com/dqn/gonso
 
 go 1.14
 

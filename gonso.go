@@ -1,4 +1,4 @@
-package nso
+package gonso
 
 import (
 	"bytes"
@@ -23,7 +23,7 @@ const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456
 const clientID = "71b963c1b7b6d119"
 const credentialPath = "./nso.json"
 
-type NSO struct {
+type GONSO struct {
 	client *http.Client
 }
 
@@ -31,8 +31,8 @@ type credential struct {
 	SessionToken string `json:"session_token"`
 }
 
-func New() *NSO {
-	return &NSO{&http.Client{}}
+func New() *GONSO {
+	return &GONSO{&http.Client{}}
 }
 
 func randomBytes(n int) []byte {
@@ -365,7 +365,7 @@ func getWebServiseToken(accessToken, f, registrationToken, guid string, timestam
 	return &r, nil
 }
 
-func (n *NSO) Auth() (string, error) {
+func (n *GONSO) Auth() (string, error) {
 	c, err := loadCredential()
 	if err != nil {
 		sessionTokenCode, sessionTokenCodeVerifier := login()

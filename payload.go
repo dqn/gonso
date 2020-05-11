@@ -1,4 +1,4 @@
-package nso
+package gonso
 
 type sessionTokenResponse struct {
 	Code         string `json:"code"`
