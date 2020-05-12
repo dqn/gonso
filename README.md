@@ -1,6 +1,6 @@
 # gonso
 
-Nintendo Switch Online API wrapper
+Go Nintendo Switch Online API
 
 ## Installation
 
@@ -22,27 +22,20 @@ import (
 	"github.com/dqn/gonso"
 )
 
-type ACNHUsers struct {
-	Users []struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		Image string `json:"image"`
-		Land  struct {
-			ID        string `json:"id"`
-			Name      string `json:"name"`
-			DisplayID int    `json:"displayId"`
-		} `json:"land"`
-	} `json:"users"`
-}
-
 func main() {
-	n := gonso.New()
-	accessToken, err := n.Auth()
+	sessionToken, err := gonso.Login()
 	if err != nil {
-		panic("failed to authenticate")
+		// handle error
 	}
 
-	// Example for Animal Crossing: New Horizons API
+	// if you save the session token, you can skip the login next time
+
+	accessToken, err := gonso.Auth(sessionToken)
+	if err != nil {
+		// handle error
+	}
+
+	// example for Animal Crossing: New Horizons
 	url := "https://web.sd.lp1.acbaa.srv.nintendo.net/api/sd/v1/users"
 
 	req, _ := http.NewRequest("GET", url, nil)
@@ -51,7 +44,18 @@ func main() {
 	resp, _ := http.DefaultClient.Do(req)
 	b, _ := ioutil.ReadAll(resp.Body)
 
-	var a ACNHUsers
+	var a struct {
+		Users []struct {
+			ID    string `json:"id"`
+			Name  string `json:"name"`
+			Image string `json:"image"`
+			Land  struct {
+				ID        string `json:"id"`
+				Name      string `json:"name"`
+				DisplayID int    `json:"displayId"`
+			} `json:"land"`
+		} `json:"users"`
+	}
 	json.Unmarshal(b, &a)
 
 	user := a.Users[0]
@@ -59,14 +63,10 @@ func main() {
 }
 ```
 
-First time, you need to authenticate.
-
 ```bash
 authenticate by visiting this url: https://accounts.nintendo.com/connect/1.0.0/authorize?xxx=xxx
 session token code: <input your session token code>
 ```
-
-Credentials are cached as `./nso.json`.
 
 ### How to get session token code
 
