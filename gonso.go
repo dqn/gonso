@@ -11,7 +11,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -21,19 +20,8 @@ import (
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 const clientID = "71b963c1b7b6d119"
-const credentialPath = "./nso.json"
 
-type GONSO struct {
-	client *http.Client
-}
-
-type credential struct {
-	SessionToken string `json:"session_token"`
-}
-
-func New() *GONSO {
-	return &GONSO{&http.Client{}}
-}
+var client = http.Client{}
 
 func randomBytes(n int) []byte {
 	b := make([]byte, n)
@@ -60,63 +48,8 @@ func generateAuthURL(state, sessionTokenCodeChallenge string) string {
 	return u.String()
 }
 
-func login() (string, string) {
-	rand.Seed(time.Now().UnixNano())
-	state := base64.RawURLEncoding.EncodeToString(randomBytes(36))
-	sessionTokenCodeVerifier := base64.RawURLEncoding.EncodeToString(randomBytes(32))
-	hash := sha256.Sum256([]byte(sessionTokenCodeVerifier))
-	sessionTokenCodeChallenge := base64.RawURLEncoding.EncodeToString(hash[:])
-	u := generateAuthURL(state, sessionTokenCodeChallenge)
-
-	fmt.Printf("authenticate by visiting this url: %s\n", u)
-
-	var sessionTokenCode string
-	fmt.Print("session token code: ")
-	fmt.Scanf("%s", &sessionTokenCode)
-
-	return sessionTokenCode, sessionTokenCodeVerifier
-}
-
-func saveCredential(c *credential) error {
-	raw, err := json.Marshal(c)
-	if err != nil {
-		return err
-	}
-	f, err := os.Create(credentialPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	if _, err = f.Write(raw); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func loadCredential() (*credential, error) {
-	f, err := os.Open(credentialPath)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	b, err := ioutil.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-
-	var c credential
-	if err = json.Unmarshal(b, &c); err != nil {
-		return nil, err
-	}
-
-	return &c, nil
-}
-
 func processRequest(req *http.Request) ([]byte, error) {
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -365,19 +298,30 @@ func getWebServiseToken(accessToken, f, registrationToken, guid string, timestam
 	return &r, nil
 }
 
-func (n *GONSO) Auth() (string, error) {
-	c, err := loadCredential()
+func Login() (string, error) {
+	rand.Seed(time.Now().UnixNano())
+	state := base64.RawURLEncoding.EncodeToString(randomBytes(36))
+	sessionTokenCodeVerifier := base64.RawURLEncoding.EncodeToString(randomBytes(32))
+	hash := sha256.Sum256([]byte(sessionTokenCodeVerifier))
+	sessionTokenCodeChallenge := base64.RawURLEncoding.EncodeToString(hash[:])
+	u := generateAuthURL(state, sessionTokenCodeChallenge)
+
+	fmt.Printf("authenticate by visiting this url: %s\n", u)
+
+	var sessionTokenCode string
+	fmt.Print("session token code: ")
+	fmt.Scanf("%s", &sessionTokenCode)
+
+	st, err := getSessionToken(sessionTokenCode, sessionTokenCodeVerifier)
 	if err != nil {
-		sessionTokenCode, sessionTokenCodeVerifier := login()
-		st, err := getSessionToken(sessionTokenCode, sessionTokenCodeVerifier)
-		if err != nil {
-			return "", err
-		}
-		c = &credential{st.SessionToken}
-		defer saveCredential(c)
+		return "", err
 	}
 
-	t, err := getToken(c.SessionToken)
+	return st.SessionToken, nil
+}
+
+func Auth(sessionToken string) (string, error) {
+	t, err := getToken(sessionToken)
 	if err != nil {
 		return "", err
 	}

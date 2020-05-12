@@ -1,10 +1,12 @@
 package gonso
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
-func TestALL(t *testing.T) {
-	n := New()
-	_, err := n.Auth()
+func TestAuth(t *testing.T) {
+	_, err := Auth(os.Getenv("SESSION_TOKEN"))
 	if err != nil {
 		t.Fatal(err)
 	}
