@@ -70,12 +70,16 @@ session token code: <input your session token code>
 
 ### How to get session token code
 
-1. Select user and copy the link.
+1.  Select user and copy the link.
 
-	![](docs/copy_link.png)
+    ![](docs/copy_link.png)
 
-2. You can get session token code from query params.
+2.  You can get session token code from query params.
 
-	```
-	npf71b963c1b7b6d119://auth#session_state=xxx&session_token_code=xxx...
-	```
+    ```
+    npf71b963c1b7b6d119://auth#session_state=xxx&session_token_code=xxx...
+    ```
+
+## License
+
+MIT
