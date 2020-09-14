@@ -246,7 +246,7 @@ func callFlapgAPI(iid, token, guid string, timestamp int64) (*flagpResponse, err
 func loginNSOApp(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
 	u := "https://api-lp1.znc.srv.nintendo.net/v1/Account/Login"
 	header := &http.Header{
-		"x-productversion": {"1.6.1.2"},
+		"x-productversion": {"1.8.0"},
 		"x-platform":       {"Android"},
 	}
 	body := &loginRequest{
