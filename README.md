@@ -1,5 +1,7 @@
 # gonso
 
+[![build status](https://github.com/dqn/gonso/workflows/build/badge.svg)](https://github.com/dqn/gonso/actions)
+
 Nintendo Switch Online API wrapper written in Go.
 
 ## Installation
