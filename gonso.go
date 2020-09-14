@@ -18,17 +18,31 @@ import (
 	"github.com/google/uuid"
 )
 
-const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-const clientID = "71b963c1b7b6d119"
+const (
+	letterBytes       = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	clientID          = "71b963c1b7b6d119"
+	webServiceTokenID = 4953919198265344
 
-var client = http.Client{}
+	letterByteLen = int64(len(letterBytes))
+)
+
+var client = &http.Client{}
 
 func randomBytes(n int) []byte {
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = letterBytes[rand.Int63()%int64(len(letterBytes))]
+		b[i] = letterBytes[rand.Int63()%letterByteLen]
 	}
 	return b
+}
+
+func generateURLEncodedRandomString(length int) string {
+	return base64.RawURLEncoding.EncodeToString(randomBytes(length))
+}
+
+func hashUsingSHA256AndURLEncode(s string) string {
+	hash := sha256.Sum256([]byte(s))
+	return base64.RawURLEncoding.EncodeToString(hash[:])
 }
 
 func generateAuthURL(state, sessionTokenCodeChallenge string) string {
@@ -48,7 +62,7 @@ func generateAuthURL(state, sessionTokenCodeChallenge string) string {
 	return u.String()
 }
 
-func processRequest(req *http.Request) ([]byte, error) {
+func doRequest(req *http.Request) ([]byte, error) {
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -83,7 +97,7 @@ func postJSON(url string, header *http.Header, body interface{}) ([]byte, error)
 	}
 	req.Header.Set("content-type", "application/json; charset=utf-8")
 
-	b, err := processRequest(req)
+	b, err := doRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +121,7 @@ func postForm(url string, header *http.Header, body *url.Values) ([]byte, error)
 	}
 	req.Header.Set("content-type", "application/x-www-form-urlencoded")
 
-	b, err := processRequest(req)
+	b, err := doRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +226,7 @@ func callFlapgAPI(iid, token, guid string, timestamp int64) (*flagpResponse, err
 		"x-iid":   {iid},
 	}
 
-	b, err := processRequest(req)
+	b, err := doRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +288,7 @@ func getWebServiseToken(accessToken, f, registrationToken, guid string, timestam
 	body := &webServiceTokenRequest{
 		webServiceTokenRequestParameter{
 			f,
-			4953919198265344,
+			webServiceTokenID,
 			registrationToken,
 			guid,
 			timestamp,
@@ -300,10 +314,13 @@ func getWebServiseToken(accessToken, f, registrationToken, guid string, timestam
 
 func Login() (string, error) {
 	rand.Seed(time.Now().UnixNano())
-	state := base64.RawURLEncoding.EncodeToString(randomBytes(36))
-	sessionTokenCodeVerifier := base64.RawURLEncoding.EncodeToString(randomBytes(32))
-	hash := sha256.Sum256([]byte(sessionTokenCodeVerifier))
-	sessionTokenCodeChallenge := base64.RawURLEncoding.EncodeToString(hash[:])
+
+	var (
+		state                     = generateURLEncodedRandomString(36)
+		sessionTokenCodeVerifier  = generateURLEncodedRandomString(32)
+		sessionTokenCodeChallenge = hashUsingSHA256AndURLEncode(sessionTokenCodeVerifier)
+	)
+
 	u := generateAuthURL(state, sessionTokenCodeChallenge)
 
 	fmt.Printf("authenticate by visiting this url: %s\n", u)
@@ -331,8 +348,10 @@ func Auth(sessionToken string) (string, error) {
 		return "", err
 	}
 
-	guid := uuid.String()
-	timestamp := time.Now().Unix()
+	var (
+		guid      = uuid.String()
+		timestamp = time.Now().Unix()
+	)
 
 	r, err := callFlapgAPI("nso", t.IDToken, guid, timestamp)
 	if err != nil {
