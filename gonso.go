@@ -19,6 +19,7 @@ import (
 )
 
 const (
+	productVersion    = "1.9.0"
 	letterBytes       = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	clientID          = "71b963c1b7b6d119"
 	webServiceTokenID = 4953919198265344
@@ -246,7 +247,7 @@ func callFlapgAPI(iid, token, guid string, timestamp int64) (*flagpResponse, err
 func loginNSOApp(idToken, f, guid string, timestamp int64) (*loginResponse, error) {
 	u := "https://api-lp1.znc.srv.nintendo.net/v1/Account/Login"
 	header := &http.Header{
-		"x-productversion": {"1.8.0"},
+		"x-productversion": {productVersion},
 		"x-platform":       {"Android"},
 	}
 	body := &loginRequest{
@@ -286,7 +287,7 @@ func getWebServiseToken(accessToken, f, registrationToken, guid string, timestam
 	u := "https://api-lp1.znc.srv.nintendo.net/v2/Game/GetWebServiceToken"
 	header := &http.Header{
 		"authorization":    {fmt.Sprintf("Bearer %s", accessToken)},
-		"x-productversion": {"1.6.1.2"},
+		"x-productversion": {productVersion},
 		"x-platform":       {"Android"},
 	}
 	body := &webServiceTokenRequest{

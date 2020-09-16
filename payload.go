@@ -52,7 +52,7 @@ type user struct {
 	SupportID  string     `json:"supportId"`
 }
 
-type webApiServerCredential struct {
+type webAPIServerCredential struct {
 	AccessToken string `json:"accessToken"`
 	ExpiresIn   int    `json:"expiresIn"`
 }
@@ -77,14 +77,14 @@ type flagpResponse struct {
 type loginResponseResult struct {
 	FirebaseCredential     firebaseCredential     `json:"firebaseCredential"`
 	User                   user                   `json:"user"`
-	WebAPIServerCredential webApiServerCredential `json:"webApiServerCredential"`
+	WebAPIServerCredential webAPIServerCredential `json:"webApiServerCredential"`
 }
 
 type loginResponse struct {
 	CorrelationID string              `json:"correlationId"`
 	Result        loginResponseResult `json:"result"`
 	Status        int                 `json:"status"`
-	Error         string              `json:"error"`
+	ErrorMessage  string              `json:"errorMessage"`
 }
 
 type webServiceTokenRequestParameter struct {
