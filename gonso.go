@@ -271,8 +271,12 @@ func loginNSOApp(idToken, f, guid string, timestamp int64) (*loginResponse, erro
 		return nil, err
 	}
 
-	if r.Error != "" {
-		return nil, fmt.Errorf(r.Error)
+	if r.Status == 9427 {
+		return nil, fmt.Errorf("upgrade required")
+	}
+
+	if r.ErrorMessage != "" {
+		return nil, fmt.Errorf(r.ErrorMessage)
 	}
 
 	return &r, nil
